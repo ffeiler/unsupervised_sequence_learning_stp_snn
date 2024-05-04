@@ -1,0 +1,155 @@
+network:
+  n_input: 100
+  n_exc: 1200 
+  n_inh: 150 
+  bidirectional_ei: False # if True, ei and ie have the same topology (i -> e and e -> i)
+  connectivity: # all are percent of incoming population
+    ex: 0.25 # / 100
+    ee_dAP: 0.25 # / 1200
+    ei: 0.25 # / 150 
+    iin: 0 # / 100 # 0
+    ie: 0.05 # / 1200 
+    ii: 0.0 # / 150 
+
+# ========== NEURON MODELS ==========
+
+excitatory:
+  model: 'iaf_psc_exp_nonlineardendrite'
+  params:
+    C_m: 250.0 # membrane capacitance (pF)
+    E_L: 0.0 # resting membrane potential (mV)
+    V_m: 0.0 # initial potential (mV)
+    V_th: 18.0 # spike threshold (mV)
+    V_reset: 0.0 # reset potential (mV)
+    t_ref: 2.0 # refractory period
+    tau_m: 10.0 # membrane time constant (ms)
+    tau_h: 0.0 # dAP trace  time constant (ms), derived
+    tau_syn1: 2.1 # synaptic time constant: external input (receptor 1)
+    tau_syn2: 4.0 # synaptic time constant: dendritic input (receptor 2)
+    tau_syn3: 1.0 # synaptic time constant: inhibitory input (receptor 3)
+    tau_syn4: 2.0 # synaptic time constant: recurrent ee STDP input (receptor 4) 
+    I_p: 120.0  # current clamp value for I_dAP during a dendritic action potential # CHANGE 120
+    tau_dAP: 0.0 # time window over which the dendritic current clamp is active, derived
+    theta_dAP: 20.0 # current threshold for a dendritic action potential # CHANGE 14
+    tau_sfa: 35.0 # time constant of spike frequency adaptation (SFA)
+    Delta_I_sfa: 0.0 # SFA deflection current
+
+
+inhibitory:
+  model: 'iaf_psc_exp'
+  params:
+    C_m: 250.0 # membrane capacitance (pF)
+    E_L: 0.0 # resting membrane potential (mV)
+    V_m: 0.0 # initial potential (mV)
+    I_e: 0.0 # external input current
+    V_th: 12.0 # spike threshold (mV)
+    V_reset: 0.0 # reset potential (mV)
+    t_ref: 1.0 # refractory period
+    tau_m: 4.0 # membrane time constant (ms)
+    tau_syn_ex: 0.5 # synaptic time constant: excitatory input
+    tau_syn_in: 1.65 # synaptic time constant: inhibitory input
+
+# ========== SYNAPSE MODELS ==========
+
+synapses:
+  ex:
+
+    synapse_model: 'stdp_synapse'
+    weight: 200.0 # Initial weight
+    Wmax: 400.0  # Maximum allowed weight
+    delay: 1.0 # dendritic delay [ms] 
+    lambda: 0.01 # potentiation rate
+    alpha: 1.0 # bias depressing factor STDP
+    receptor_type: 1
+  iin:
+    synapse_model: 'static_synapse'
+    weight: 0.0
+    delay: 1.0
+  ee_dAP: # dAP mechanism, aim: prediction
+    synapse_model: 'stdp_synapse_negRect_hardRange'
+    delay : 1.5  # dendritic delay [ms]
+    Wmax : 5.0 # 5.0 # Maximum allowed weight 
+    weight: 0.15  # Initial weight
+    Wmin : 0.1  # Minimum allowed permanence
+    lambda : 50.0   # potentiation rate # 30  # CHANGE 70
+    lambda_minus : 0.0045  # depression rate # CHANGE 0.0025
+    # tau_tr_pre: 20.0
+    dt_min : -0 # -50.0  # minimum time lag of the STDP window [ms]
+    dt_max : -0 # -150.0  # maximum time lag of the STDP window [ms]
+    zt: 1.0 # target for homeostatic control
+    receptor_type: 2
+  ie:
+    synapse_model: 'static_synapse'
+    weight: 0.0 # derived param, 0 for debugging
+    delay: 0.1
+  ei:
+    synapse_model: 'static_synapse'
+    weight: -400.0
+    delay: 0.1
+    receptor_type: 3
+  ii:
+    synapse_model: 'static_synapse'
+    weight: -10.0
+    delay: 1.5
+
+# ========== METRICS/PLOTS ==========
+
+metrics:
+  pred_offset: 0.0
+  dAP_interval: 10.0
+  PSC_recording_interval: 1.0
+  PSC_recording_dt: 1200.0
+
+weight_dists:
+  ex:
+    used: True
+    mean: 200.0
+    std: 50.0
+    max: 400.0
+    min: 0.0
+  ee_dAP:
+    used: True
+    mean: 0.15
+    std: 0.05
+    max: 5.0
+    min: 0.1
+
+delays:
+  ex:
+    min: 1.0
+    max: 50.0
+  inverted_patterns: True 
+
+t_ref:
+  exc: 
+    min: 1.0
+    max: 7.0
+
+# ========== SIMULATION DETAILS ==========
+
+simulation:
+  data_folder: 'sweeps'
+  data_type: 'temporal' # ["spatial", "temporal", "spatiotemporal", 'stm']
+  duration: 1000.0 # fallback for t_sim
+  dt: 0.1
+  local_num_threads: 4
+  nb_iterations_per_item: 100 # CHANGE HERE THE SIMULATION TIME, 
+  # default: 500 iterations x 5 items x (50 ms + 50 ms) [items+noise] = 250.000 ms ~ 4.2 min
+  # debugging ~ 50-120 iterations should be fine. Adapt metrics.dAP values accordingly
+  nb_patterns: 5 # default for sequence method "random", otherwise automatically set
+  noise:
+    t_initial: 200 # ms
+    dt: 50 # ms
+    dt_factor_inter: 3.0 # don't change, there are hardcorded dependencies
+    constant: True # if True, length of noise items is constant (dt)
+    rate: 0.1 # noise rate relative to the input rate # CHANGE 0.1
+  protocol:
+    two_phase_learning: True # if True, W_EX, then W_EE_dAP
+    phase_time_split: 0.3 # relative time split for the first phase
+    relative_ei_weight_increase: 4.0 # factor for EI weight increase during second learning phase
+  seed: 3407
+  sequence_method: 'hierarchical_4' # "hierarchical_n, random"
+  jitter_mode: 'temporal'
+  jitter_strength: 1 # [x0.1 ms]
+  input:
+    resolution: 0.1
